@@ -1,0 +1,367 @@
+首先需要两台电脑，可以两个同学共同来完成；当然，如果自己有两台电脑的话就更好了！
+
+
+
+在一台电脑上创建一个TCP Socket服务器应用程序
+
+
+
+#define _CRT_SECURE_NO_WARNINGS
+#include <iostream>
+#include <WinSock2.h>
+#include <stdlib.h>
+
+
+#pragma comment (lib,"WS2_32.lib");
+#define BUF_SIZE 64
+
+
+int main()
+{
+WSADATA wsd;         //WSADATA变量，用于初始化Windows Socket 
+SOCKET sServer;     //服务器socket，用于监听客户端请求
+SOCKET sClient;     //客户端socket，用于实现与客户端的通信
+int retVal;         //调用各种socket函数的返回值
+char buf[BUF_SIZE];
+
+
+//初始化Socket环境
+if (WSAStartup(MAKEWORD(2, 2), &wsd) != 0)
+{
+//printf("WASStartup failed !\n");
+std::cout << "WASStartup failed !" << std::endl;
+return 1;
+}
+
+
+//创建用于监听的Socket
+sServer = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+if (sServer == INVALID_SOCKET)
+{
+//printf("socket failed !\n");
+std::cout << "socket failed !" << std::endl;
+return -1;
+}
+
+
+//设置服务器Socket地址
+SOCKADDR_IN addrServ;
+addrServ.sin_family = AF_INET;
+addrServ.sin_port = htons(9990);
+addrServ.sin_addr.S_un.S_addr = htons(INADDR_ANY);
+
+
+//绑定Sockets Server 到本地地址
+retVal = bind(sServer, (const struct sockaddr *)&addrServ, sizeof(SOCKADDR_IN));
+if (SOCKET_ERROR == retVal)
+{
+std::cout << "bind failed !" << std::endl;
+closesocket(sServer);
+WSACleanup();
+return -1;
+}
+
+
+//在Socket Server上进行监听
+retVal = listen(sServer,1);
+if (SOCKET_ERROR==retVal)
+{
+std::cout << "listen failed !" << std::endl;
+closesocket(sServer);
+WSACleanup();
+return -1;
+}
+
+
+
+
+//接受来自客户端的请求
+std::cout << "TCP Server Start..." << std::endl;
+sockaddr_in addrClient;    //客户端地址
+int addrClientLen = sizeof(addrClient);
+sClient = accept(sServer, (sockaddr FAR *)&addrClient, &addrClientLen);
+if (INVALID_SOCKET == sClient)
+{
+std::cout << "accept failed !" << std::endl;
+closesocket(sServer);
+WSACleanup();
+return -1;
+}
+
+
+
+
+//在服务器与客户端之间发送和接收数据
+
+
+//循环接受客户端的数据，直接客户端发送quit命令后退出
+while (true)
+{
+memset(buf, 0, BUF_SIZE);
+retVal = recv(sClient, buf, BUF_SIZE, 0);
+if (SOCKET_ERROR == retVal)
+{
+std::cout << "recv failed !" << std::endl;
+closesocket(sServer);
+WSACleanup();
+return -1;
+}
+//获取当前系统时间
+SYSTEMTIME st;
+GetLocalTime(&st);
+char sDataTime[30];
+sprintf(sDataTime, "%4d-%2d-%2d %2d:%2d:%2d", st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
+//打印输出信息
+std::cout << sDataTime << "Recv from Client [" << inet_ntoa(addrClient.sin_addr) << ":";
+std::cout << addrClient.sin_port << "] : " << buf << std::endl;
+
+
+//如果客户端发送“quit”字符串，则服务器退出
+if (strcmp(buf, "quit") == 0)
+{
+retVal = send(sClient, "quit", strlen("quit"), 0);
+break;
+}
+//否则向客户端发送回显字符串
+else
+{
+char msg[BUF_SIZE];
+sprintf(msg, "Message received - %s", buf);
+retVal = send(sClient, msg, strlen(msg), 0);
+if (SOCKET_ERROR == retVal)
+{
+std::cout << "send failed !" << std::endl;
+closesocket(sServer);
+closesocket(sClient);
+WSACleanup();
+return -1;
+}
+}
+
+
+}
+
+
+//释放资源
+closesocket(sServer);
+closesocket(sClient);
+WSACleanup();
+
+
+
+
+system("pause");
+return 0;
+
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+接着在另一台电脑上创建一个TCP Socket客户端应用程序
+
+
+
+#include <iostream>
+#include <stdio.h>
+#include <WinSock2.h>
+#include <string>
+#include <stdlib.h>
+
+
+#pragma comment (lib,"ws2_32.lib")
+#define BUF_SIZE  64
+
+
+int main()
+{
+WSADATA wsd;   //用于初始化Windows socket
+SOCKET sHost;   //与服务器进行通信的socket
+SOCKADDR_IN servAddr;  //服务器地址
+char buf[BUF_SIZE];   //用于接收数据缓冲区
+int retVal;    //调用各种Socket函数的返回值
+
+
+//初始化socket动态库
+if(WSAStartup(MAKEWORD(2,2),&wsd)!=0)
+{
+std::cout<<"WSAStartup failed !"<<std::endl;
+return -1;
+}
+
+
+//创建用于通信的socket
+sHost=socket(AF_INET,SOCK_STREAM,IPPROTO_TCP);
+if(INVALID_SOCKET==sHost)
+{
+std::cout<<"socket failed !"<<std::endl;
+WSACleanup();;
+return -1;
+}
+
+
+
+
+//设置服务器Socket地址
+servAddr.sin_family=AF_INET;
+//用户需要根据实际情况修改
+servAddr.sin_addr.S_un.S_addr=inet_addr("192.168.88.103");   
+servAddr.sin_port=htons(9990);
+int sServerAddrlen=sizeof(servAddr);
+
+
+
+
+//连接到服务器
+retVal=connect(sHost,(LPSOCKADDR)&servAddr,sizeof(servAddr));   
+if(SOCKET_ERROR==retVal)
+{
+std::cout<<"connect failed !"<<std::endl;
+closesocket(sHost);
+WSACleanup();
+return -1;
+}
+
+
+//在客户端与服务器之间发送和接收数据
+while(true)
+{
+std::cout<<"Please input a string to send: ";
+std::string str;
+ //接收输入的数据
+std::getline(std::cin,str);
+ //将用户输入的数据复制到buf钟
+ZeroMemory(buf,BUF_SIZE);
+strcpy(buf,str.c_str());
+
+
+//向服务器发送数据
+retVal=send(sHost,buf,strlen(buf),0);
+if(SOCKET_ERROR==retVal)
+{
+std::cout<<"send failed !"<<std::endl;
+closesocket(sHost);
+WSACleanup();
+return -1;
+}
+
+
+//接收服务器回传的数据
+retVal=recv(sHost,buf,sizeof(buf)+1,0);
+std::cout<<"Recv from Server: "<<buf<<std::endl;
+
+
+if(strcmp(buf,"quit")==0)
+{
+std::cout<<"quit!"<<std::endl;
+break;
+}
+}
+
+
+//释放资源
+closesocket(sHost);
+WSACleanup();
+
+
+system("pause");
+
+
+return 0;
+}
+
+
+--------------------- 
+单片机与电脑
+#include "stm32f10x.h"
+void my_delay_ms(int time);
+void my_delay_ms(int time)
+{
+      int i=0;
+      while(time--)
+       {
+            i=12000;
+            while(i)
+            {                
+                i--;
+            }
+       }
+}
+void uart_init(u32 bound){
+  //GPIO端口设置
+    GPIO_InitTypeDef GPIO_InitStructure;
+    USART_InitTypeDef USART_InitStructure;
+    NVIC_InitTypeDef NVIC_InitStructure;
+
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_USART1|RCC_APB2Periph_GPIOA, ENABLE); //使能USART1，GPIOA时钟
+
+    //USART1_TX   GPIOA.9
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_9; //PA.9
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP; //复用推挽输出
+    GPIO_Init(GPIOA, &GPIO_InitStructure);//初始化GPIOA.9
+
+    //USART1_RX   GPIOA.10初始化
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_10;//PA10
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;//浮空输入
+    GPIO_Init(GPIOA, &GPIO_InitStructure);//初始化GPIOA.10  
+
+  //Usart1 NVIC 配置
+    NVIC_InitStructure.NVIC_IRQChannel = USART1_IRQn;
+    NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority=3 ;//抢占优先级3
+    NVIC_InitStructure.NVIC_IRQChannelSubPriority = 3;      //子优先级3
+    NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;         //IRQ通道使能
+    NVIC_Init(&NVIC_InitStructure); //根据指定的参数初始化VIC寄存器
+
+   //USART 初始化设置
+
+    USART_InitStructure.USART_BaudRate = bound;//串口波特率
+    USART_InitStructure.USART_WordLength = USART_WordLength_8b;//字长为8位数据格式
+    USART_InitStructure.USART_StopBits = USART_StopBits_1;//一个停止位
+    USART_InitStructure.USART_Parity = USART_Parity_No;//无奇偶校验位
+    USART_InitStructure.USART_HardwareFlowControl = USART_HardwareFlowControl_None;//无硬件数据流控制
+    USART_InitStructure.USART_Mode = USART_Mode_Rx | USART_Mode_Tx; //收发模式
+
+    USART_Init(USART1, &USART_InitStructure); //初始化串口1
+    USART_ITConfig(USART1, USART_IT_RXNE, ENABLE);//开启串口接受中断
+    USART_Cmd(USART1, ENABLE);                    //使能串口1 
+
+}
+
+uint16_t str=1;
+int main()
+{   
+    u16 times=0;
+    uart_init(115200);
+    //key_init();
+    while(1)
+    {
+        times++;
+        my_delay_ms(10);
+        if(times%10000)
+        {           
+            USART_SendData(USART1, str);//向串口1发送数据
+            while(USART_GetFlagStatus(USART1,USART_FLAG_TC)!=SET);  
+        }
+
+
+    }           
+    return 0;   
+
+}
